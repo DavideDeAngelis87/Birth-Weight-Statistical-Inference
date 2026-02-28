@@ -1,0 +1,1194 @@
+---
+title: "Modello Statistico per la Previsione del Peso Neonatale"
+format: html
+editor: visual
+df-print: kable
+toc: true
+number-sections: true
+---
+
+# Introduzione
+
+L'analisi nasce dall'esigenza di avere una previsione anticipata del peso del neonato, al fine di una più corretta pianificazione delle risorse da allocare in caso di peso inferiore alle aspettative.
+
+Il peso è difatti una caratteristica indicativa e di grande rilievo per la salute del neonato e in caso sia troppo basso, devono essere predisposte strumentazioni e persone per effettuare attività ben precise, atte a riportare il peso entro i parametri corretti.
+
+Il progetto si inserisce all'interno di un contesto di crescente attenzione verso la prevenzione delle complicazioni neonatali. La possibilità di prevedere il peso alla nascita dei neonati rappresenta un'opportunità fondamentale per migliorare la pianificazione clinica e ridurre i rischi associati a nascite problematiche, come parti prematuri o neonati con basso peso. Di seguito, i principali benefici che questo progetto porterà all’azienda e al settore sanitario:
+
+1.  **Miglioramento delle previsioni cliniche:**
+
+    -   Il peso del neonato è un indicatore chiave della sua salute. Avere un modello predittivo accurato consente al personale medico di intervenire tempestivamente in caso di anomalie, riducendo le complicazioni perinatali come le difficoltà respiratorie o l’ipoglicemia.
+
+2.  **Ottimizzazione delle risorse ospedaliere:**
+
+    -   Sapere in anticipo quali neonati potrebbero avere bisogno di cure intensive aiuta a organizzare le risorse umane e tecnologiche degli ospedali in modo efficiente. Questo si traduce in una riduzione dei costi operativi e una migliore pianificazione dell’utilizzo delle unità di terapia intensiva neonatale (TIN).
+
+3.  **Prevenzione e identificazione dei fattori di rischio:**
+
+    -   Il modello potrà evidenziare i fattori che maggiormente influenzano negativamente il peso del neonato (come il fumo materno, gravidanze multiple o età avanzata della madre). Queste informazioni sono preziose per la prevenzione e la gestione personalizzata delle gravidanze, permettendo interventi proattivi in caso di rischio elevato.
+
+4.  **Valutazione delle pratiche ospedaliere:**
+
+    -   Attraverso un’analisi comparativa tra i tre ospedali coinvolti, l’azienda potrà identificare eventuali differenze nei risultati clinici, come una maggiore incidenza di parti cesarei in una determinata struttura. Ciò consente di monitorare la qualità delle pratiche e armonizzare i protocolli tra i diversi centri ospedalieri, migliorando la coerenza delle cure.
+
+5.  **Supporto alla pianificazione strategica:**
+
+    -   L’analisi dei dati e le previsioni possono essere utilizzate per prendere decisioni informate non solo a livello clinico ma anche strategico. L'azienda potrà sfruttare queste informazioni per implementare nuove politiche di salute pubblica, garantendo un impatto positivo sui tassi di mortalità e morbilità neonatale.
+
+# Analisi descrittiva
+
+In questa sezione si utilizzeranno i più noti indicatori statistici per descrivere il dataset utilizzato al fine di:
+
+-   conoscerne adeguatamente le variabili,
+
+-   individuare eventuali valori anomali e inquadrarli
+
+-   comprendere la struttura generale dei dati
+
+## Il dataset
+
+```{r}
+
+setwd("~/ProfessionAI - Data Science/03_Statistica inferenziale")
+neonati = read.csv("neonati.csv", stringsAsFactors = T)
+
+
+```
+
+## Le librerie
+
+Di seguito le librerie utilizzate per condurre l'analisi. Sostanzialmente tutto il pacchetto tidyverse per analisi, manipolazione dei dati, nonchè creazioni di grafici.
+
+Le librerie car, MASS e lmtest tutte dedicate ai test sul modello statistico definito.
+
+```{r, message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(moments)
+library(tidyr)
+library(car)
+library(MASS)
+library(lmtest)
+
+```
+
+## Le variabili
+
+I dati analizzati sono stati raccolti da 3 ospedali differenti, in ciascuno dei quali le variabili registrate sono state 8, con 2500 osservazioni totali.
+
+Queste sono le 8 variabili studiate all'interno del campione
+
+```{r}
+colnames(neonati)
+```
+
+Di seguito una loro breve descrizione:
+
+-   **Anni.madre:** Misura dell'età in anni.
+
+-   **N.gravidanze:** Quante gravidanze ha avuto la madre.
+
+-   **Fumatrici:** Un indicatore binario (0=non fumatrice, 1=fumatrice).
+
+-   **Gestazione:** Numero di settimane di gestazione.
+
+-   **Peso:** Peso alla nascita in grammi.
+
+-   **Lunghezza:** lunghezza del neonato in mm, misurabile anche durante la gravidanza tramite ecografie.
+
+-   **Cranio:** diametro craniale, misurabile anche durante la gravidanza tramite ecografie.
+
+-   **Tipo.parto:** Naturale o cesareo.
+
+-   **Ospedale:** Ospedale di nascita 1, 2 o 3.
+
+-   **Sesso:** Maschio (M) o femmina (F).
+
+Di seguito invece una visione di sintesi dei quantili e della media di ciascuna variabile nel dataset
+
+```{r}
+
+summary(neonati)
+```
+
+Balza subito all'occhio che ci sia qualcosa che non vada nella variabile Anni.madre, poichè presenta un valore minimo di 0, cosa ovviamente impossibile.
+
+Si effettua quindi una verifica più puntuale per individuare altri valori chiaramente anonimi, filtrando il dataset per la variabile anni.madre \< 15
+
+```{r}
+
+neonati %>%
+  filter(Anni.madre < 15) %>%
+  arrange(Anni.madre)
+```
+
+Si evince che, pur essendo valori di età bassi, 13 e 14 non possono essere scartati perchè comunque verosimili. Lo stesso non si può ovviamente dire per 1 e 0.
+
+Probabilmente si tratta di errori di battitura che però potrebbero influenzare negativamente le conclusioni che si prenderanno. Si decide dunque di eliminare queste 2 osservazioni dal dataset
+
+```{r}
+
+neonati.clean = neonati %>%
+  filter(Anni.madre > 1)
+
+```
+
+## Gli indici
+
+Di seguito verranno calcolati gli indici di variabilità e di forma, così da avere un'idea della possibile distribuzione delle variabili e soffermarci su envtuali valori degni di nota.
+
+Resteranno fuori da questa analisi quantitativa, le variabili qualitative come Sesso e Ospedale.
+
+### Indici di variabilità
+
+Gli indici di variabilità forniscono un secondo livello di informazioni sulle variabili, in particolare indicano quanto esse siano disperse o concentrate attorno al valore medio.
+
+Di seguito una tabella che raccoglie, per ogni variabile quantitativa, gli indici di variabilità corrispettivi.
+
+```{r}
+#| label: tbl-indici_variazione
+#| tbl-cap: "Indici di variazione"
+
+attach(neonati.clean)
+
+variance = round(c(var(Anni.madre),
+var(N.gravidanze),
+var(Gestazione),
+var(Peso),
+var(Lunghezza),
+var(Cranio)),2)
+
+standard_dev = round(sqrt(variance),2)
+
+IQR = round(c(IQR(Anni.madre),
+IQR(N.gravidanze),
+IQR(Gestazione),
+IQR(Peso),
+IQR(Lunghezza),
+IQR(Cranio)),2)
+
+variation_index = round(c(sd(Anni.madre)/mean(Anni.madre),
+                    sd(N.gravidanze)/mean(N.gravidanze),
+                    sd(Gestazione)/mean(Gestazione),
+                    sd(Peso)/mean(Peso),
+                    sd(Lunghezza)/mean(Lunghezza),
+                    sd(Cranio)/mean(Cranio)),2)
+
+VARIATION_GLOBAL = data.frame(IQR, variance, standard_dev, variation_index)
+rows = c("anni_madre", "n_gravidanze", "gestazione", "peso", "lunghezza", "cranio")
+row.names(VARIATION_GLOBAL) = rows
+
+VARIATION_GLOBAL
+
+```
+
+### Indici di forma
+
+Gli indici di forma forniscono informazioni sulla forma della distribuzione, indicando quanto essa sia asimmetrica, con il vertice della campana dunque spostato verso sinistra o destra rispetto a una gaussiana standard, oppure quanto tale vertice si alzi o abbassi rispetto a una gaussiana standard.
+
+Di seguito una tabella con l’indice di asimmetria e curtosi per ogni variabile
+
+```{r}
+#| label: tbl-indici_forma
+#| tbl-cap: "Indici di forma"
+
+Skewness = round(c(skewness(Anni.madre),
+  skewness(N.gravidanze),
+  skewness(Gestazione),
+  skewness(Peso),
+  skewness(Lunghezza),
+  skewness(Cranio)),2)
+
+Kurtosis = round(c(kurtosis(Anni.madre),
+             kurtosis(N.gravidanze),
+             kurtosis(Gestazione),
+             kurtosis(Peso),
+             kurtosis(Lunghezza),
+             kurtosis(Cranio)),2)
+
+SHAPE_GLOBAL = data.frame(Skewness,Kurtosis)
+row.names(SHAPE_GLOBAL) = rows
+
+SHAPE_GLOBAL
+```
+
+### Commenti sugli indici
+
+Possiamo senza dubbio concludere che le variabili osservate non presentano un'eccessiva varibilità. Confrontando l'indice di variazione infatti, vale a dire la media divisa per la deviazione standard, solo il numero di gravidanze sembra mostrare un particolare scostamento, con la deviazione standard il 30% più grande della media.
+
+Il numero di gravidanze, insieme alle settimane di gestazione, presentano invece la maggiore asimmetria. In particolare:
+
+-   il numero di gravidanze ha un'asimmetria positiva, verso sinistra dunque. Questo ci dice che, tendenzialmente, il nostro campione è composto da mamme con pochi parti alle spalle. La coda destra è comunque lunga, ad indicare che, anche se in poche occorrenze, c'è chi era alla 13ma gestazione.
+
+```{r, echo=FALSE}
+#| label: fig-n.gravidanze_count
+
+ggplot(data = neonati.clean, aes(x=N.gravidanze))+
+  geom_bar(fill="blue4",
+           alpha = 0.75)+
+  labs(title = "Distribuzione del numero di gravidanze pregresse",
+       x = "Numero di gravidanze pregresse",
+       y = "Conteggio")+
+  theme_linedraw()
+```
+
+-   Il numero di settimane di gestazione invece ha asimmetria negativa, vale a dire verso destra. Il risultato non stupisce, poichè il numero tipico di settimane di gestazione è 40. Essendo un valore "massimo", non può generare una gaussiana standard, altrimenti si avrebbe il 50% di probabilità di avere parti oltre la 40esima. Va posta attenzione sul fatto che però ci sia una coda sinistra pronunciata, con casi di nascita addirittura alla 25ma settimana. Questo potrebbe complicare le cose in fase di modellazione.
+
+```{r, echo=FALSE}
+#| label: fig-gestazione_count
+
+ggplot(data = neonati.clean, aes(x=Gestazione))+
+  geom_bar(fill="blue4", 
+           alpha=0.75)+
+  theme_linedraw()+
+  labs(title = "Distribuzione delle settimane di gestazione")
+```
+
+La Kurtosi invece ci indica la chiara tendenza di tutte le variabili a essere lepticurtiche, cioè con una "campana" più stretta e alta rispetto a una normale standard. Proprio come per l'asimmetria, le variabili decisamente più lepticurtiche, sono proprio le settimane di gestazione e il numero di gravidanze pregresse.
+
+# Test statistici sul campione
+
+In questo paragrafo verranno sondate alcune ipotesi che i dati lasciano supporre. Questo passo si rende necessario perchè, nonostante i dati del campione possano puntare in una certa direzione, bisogna sempre ricordare che, anche se numeroso, si tratta sempre di un campione.
+
+Pertanto, prima di generalizzare quello che il campione mostra, si deve cercare di capire se ci sia margine o meno per effettuare inferenza.
+
+## Differenze fisiche tra i sessi
+
+La prima domanda cui vogliamo dare risposta è: esiste differenza nelle misure antropometriche (lunghezza, peso e diametro craniale) tra i due sessi?
+
+Si pone nuovamente l'attenzione sul fatto che la domanda sia generale. Non si sta chiedendo se esistano **nel campione,** delle differenze tra sessi. Per quello un grafico sarebbe più che sufficiente.
+
+Quello che si sta chiedendo è se si possa estendere a una popolazione quanto visto sul campione.
+
+Innanzitutto, vediamo quale sia l'andamento nel campione, relativamente alle misure antropometriche, per i due sessi.
+
+```{r, echo=FALSE}
+#| label: fig-boxlunghsessi
+
+
+ggplot(data = neonati.clean, aes(x=Sesso, y=Lunghezza))+
+  geom_boxplot(fill="yellow2",
+               alpha=0.6)+
+  labs(title = "Distribuzione della lunghezza tra i due sessi")+
+  theme_linedraw()
+
+
+
+```
+
+```{r, echo=FALSE}
+#| label: fig-boxcraniosessi
+
+ggplot(data = neonati.clean, aes(x=Sesso, y=Cranio))+
+  geom_boxplot(fill="orange2",
+               alpha=0.6)+
+  labs(title = "Distribuzione del diametro craniale tra i due sessi")+
+  theme_linedraw()
+
+
+```
+
+```{r, echo=FALSE}
+#| label: fig-boxpesosessi
+
+
+ggplot(data = neonati.clean, aes(x=Sesso, y=Peso))+
+geom_boxplot(fill="green2",
+               alpha=0.6)+
+  labs(title = "Distribuzione del peso tra i due sessi")+
+  theme_linedraw()
+```
+
+I 3 grafici mostrano che, nel campione, esiste una differenza tra maschi e femmine, per tutte le misure antropometriche, laddove i maschi le hanno tendenzialmente maggiori rispetto alle femmine.
+
+Degno di nota il fatto che esistono molti valori non racchiusi dal boxplot e che dovranno essere studiati in fase di definizione del modello lineare.
+
+Testiamo ora il seguente sistema di ipotesi:
+
+$$
+\begin{cases} H_{0} : \mu_{M} - \mu_{F} = 0, & \mbox{La media per i maschi } \mu_{M}\mbox{ coincide coincide con la media per le femmine } \mu_{F}\\ H_{1} : \mu_{M} - \mu_{F} \neq  0, & \mbox{Le medie tra maschi e femmine sono diverse } \end{cases}
+$$
+
+Di volta in volta assumeremo la media per i 3 indicatori antropometrici: lunghezza, peso e diametro craniale.
+
+Si userà il test t, essendo il più adatto per confronti di medie tra due gruppi. Il livello di significatività (cioè la probabilità di rifiutare l'ipotesi nulla quando in realtà è vera) sarà fissato al 5%.
+
+### Differenza di peso tra i sessi {#sec-differenza-di-peso-tra-i-sessi}
+
+Il test verificherà che la media di peso dei maschi, sottratta alla media di peso delle femmine sia uguale a 0, vale a dire che le due media siano identiche.
+
+Il test assume che le due medie siano uguali. Se questo fosse vero, la differenza tra le due, estraendo dei campioni, si distribuirebbe secondo una curva t di Student.
+
+```{r}
+
+t.test(Peso~Sesso, data = neonati.clean) 
+```
+
+Il test mostra un p-value praticamente a 0. Questo valore indica la probabilità di ottenere una differenza tra le medie uguale rispetto a quella vista in questo campione o peggio, se fosse vera l'ipotesi nulla.
+
+Questo vuol dire che la probabilità che il nostro campione presenti una differenza tra le medie così diversa da 0 rasenta l'impossibilità. Talmente improbabile che diventa assolutamente più probabile che sia sbagliata l'ipotesi per cui le 2 medie sono coincidenti.
+
+Ergo, il test dimostra che le due medie sono diverse tra loro in maniera statisticamente molto significativa.
+
+Possiamo pertanto estendere a tutta la popolazione l'affermazione che: c'è differenza di peso tra i neonati a dipendere dal sesso.
+
+### Differenza di diametro craniale tra i sessi
+
+```{r}
+t.test(Cranio~Sesso, data = neonati.clean)  
+
+```
+
+Anche in questo caso abbiamo un p-value vicinissimo allo 0. Si rifiuta pertanto l'ipotesi nulla di uguaglianza tra le due medie e possiamo concludere che esiste differenza, tra maschi e femmine, nel diametro craniale.
+
+### Differenza di lunghezza tra i sessi
+
+```{r}
+t.test(Lunghezza~Sesso, data = neonati.clean)              
+
+```
+
+Anche in questo caso il p-value è vicino allo 0 e si rifiuta l'ipotesi nulla. Anche per la lunghezza possiamo affermare che esiste differenza tra maschi e femmine in generale.
+
+## Peso e lunghezza del campione vs popolazione
+
+Vogliamo verificare che il dato medio di peso e lunghezza del nostro campione, sia allineato ai valori medi della popolazione. Il livello di significatività lo si pone pari al 5%.
+
+$$
+\begin{cases} H_{0} :  \mbox{La media del campione coincide con la media della popolazione } \\ H_{1} :  \mbox{La media del campione è diversa dalla media della popolazione } \end{cases}
+$$
+
+Per farlo si utilizzerà sempre un test t, perchè non conoscendo la deviazione standard della popolazione, la curva t di Student userà quella del campione e incorporerà l'incertezza di questa approssimazione.
+
+Per ottenere il dato medio di peso e lunghezza dei neonati, che sarà il nostro dato di popolazione, si è attinto al sito [dell'ospedale pediatrico Bambino Gesù](https://www.ospedalebambinogesu.it/da-0-a-30-giorni-come-si-presenta-e-come-cresce-80012/#:~:text=In%20media%20il%20peso%20nascita,pari%20mediamente%20a%2050%20centimetri.) per cui risulta:
+
+-   peso medio: 3300 grammi
+
+-   lunghezza media: 50 cm
+
+```{r}
+t.test(Peso, alternative = "two.sided", mu = 3300)
+
+```
+
+Il p-value supera di poco il 13% ed essendo quindi maggiore del livello di significatività, possiamo accettare l'ipotesi nulla: la media del campione è allineata con quella della popolazione
+
+```{r}
+t.test(Lunghezza, alternative = "two.sided", mu = 500)
+
+```
+
+Lo stesso non può essere detto della lunghezza, per cui il p-value è molto vicino allo 0 e dobbiamo pertanto rifiutare l'ipotesi nulla: le lunghezze di questo campione non sono allineate con la media della popolazione.
+
+## Parti naturali vs cesarei
+
+Concentriamoci innanzitutto sul descrivere queste variabili all'interno del nostro campione.
+
+```{r, echo=FALSE}
+
+table(Tipo.parto)
+
+
+
+```
+
+Il dataset mostra una netta maggioranza di parti naturali che diventa ancora più ovvia con l'ausilio di un grafico a barre
+
+```{r,echo=FALSE}
+#| label: fig-barre.tipo_parto
+
+ggplot(data = neonati.clean, aes(x=Tipo.parto))+
+  geom_bar(fill = "lightblue", 
+           colour = "black",
+           linewidth =.3)+
+  theme_linedraw()+
+  labs(title = "Frequenze per tipologia di parto")+
+  scale_x_discrete(labels = c("Ces" = "Cesarei",
+                              "Nat" = "Naturali"))
+```
+
+Provando ad ampliare la vista includendo ora anche gli ospedali abbiamo questo grafico:
+
+```{r, echo=FALSE}
+#| label: fig-barre.parti_ospedali
+
+
+ggplot(data = neonati.clean, aes(x=Tipo.parto, fill = Ospedale))+
+  geom_bar(position = "dodge",
+           colour = "black",
+           linewidth = .25)+
+  theme_linedraw()+
+  labs(title = "Distribuzione dei tipi di parto per ospedale")
+```
+
+Da questo grafico capiamo che nel campione sembra che gli ospedali seguano lo stesso andamento sui parti, quasi fossero equidistribuiti sui 3. Verrà saggiata questa ipotesi con dei test statistici ad hoc.
+
+### Si fanno più parti naturali che cesarei?
+
+Il grafico sembrerebbe assolutamente indicare di si, ma possiamo essere così certi solo per quanto riguarda il nostro campione. Se volessimo generalizzare questa affermazione dovremmo verificare le probabilità di aver pescato un campione come il nostro.
+
+Il test più adeguato per i confronti tra variabili categoriche è il Chi-quadrato. Può essere usato per verificare l'indipendenza di due variabili, o per verificare se una variabile si scosti significativamente da una distribuzione attesa (goodness of fit).
+
+È proprio con questa seconda accezione che effettueremo il test, assumendo che non si facciano più parti di un tipo che di un altro. Quindi:
+
+$$
+\begin{cases} H_{0} : P\left( Cesareo \right) = 0,5 & \\  H_{1} : P\left( Cesareo \right) \neq  0,5\end{cases}
+$$
+
+```{r}
+chisq.test(table(Tipo.parto))
+```
+
+Il p-value è molto vicino allo 0, dobbiamo quindi rifiutare l'ipotesi nulla e possiamo affermare che effettivamente sussiste uno sbilanciamento nei tipi di parto, a favore dei naturali piuttosto che dei cesarei.
+
+### In alcuni ospedali si fanno più cesarei?
+
+Dal momento che abbiamo dimostrato che non si fanno più cesarei che naturali, la domanda è da intendersi: " C'è un ospedale che fa più cesarei degli altri? "
+
+Il grafico @fig-barre.parti_ospedali mostra che tra gli ospedali sembra esserci un'equidistribuzione dei cesarei, ma lasceremo al test saggiare questa ipotesi.
+
+```{r}
+
+PartixOsp = neonati.clean %>%
+  dplyr::select(Ospedale, Tipo.parto)
+
+PartixOsp %>%
+  filter(Tipo.parto == "Ces") %>%
+  mutate(Tipo.parto = droplevels(Tipo.parto)) %>%
+  table() %>%
+  chisq.test()
+```
+
+Il p-value è molto alto, poco oltre il 60%. Non rifiutiamo pertanto l'ipotesi nulla e affermiamo che tra gli ospedali c'è una distribuzione equa dei cesarei. Nessun ospedale ne fa quindi più degli altri in maniera statisticamente significativa.
+
+### Indipendenza delle variabili Ospedale e Tipo.parto
+
+Infine, verifichiamo se le due variabili Ospedale e Tipo.parto siano indipendenti. La loro indipendenza implicherebbe che, conoscere il valore di una non consentirebbe di ricavare il valore dell'altra.
+
+Il sistema di ipotesi pertanto è:
+
+$$
+\begin{cases} H_{0} : \mbox {Tipo.parto e Ospedale sono indipendenti} & \\  H_{1} : \mbox{Tipo.parto e Ospedale non sono indipendenti}\end{cases}
+$$
+
+```{r}
+
+PartixOsp %>%
+  table() %>%
+  chisq.test()
+```
+
+Il p-value è quasi al 60%, molto alto. Possiamo quindi accettare l'ipotesi nulla e affermare che le variabili Tipo.parto e Ospedale sono indipendenti. Questo vuol dire che non osserviamo nessuno schema ricorrente per cui, conosciuto l'ospedale, possiamo dire quale tipo di parto sarà praticato e viceversa.
+
+# Il modello di regressione
+
+In questo capitolo verrà illustrato il procedimento seguito per definire un modello lineare basato sulle variabili del dataset e che consenta di prevedere in anticipo il peso del neonato.
+
+Verrà seguita la procedura iterativa stepwise, partendo dal modello più complesso, con un regressore per ogni variabile del dataset e da lì si procederà per scremature sequenziali fino ad ottenere un buon compromesso tra varianza e semplicità.
+
+I test e i criteri di valutazione che accompagneranno la procedura saranno:
+
+-   il t test sui coefficienti di regressione delle variabili e relativo p-value. Il sistema di ipotesi è il seguente
+
+$$
+\begin{cases} H_{0} : \beta_{i} = 0 &\\ H_{0} : \beta_{i} \neq  0 \end{cases}
+$$
+
+-   Il coefficiente di determinazione aggiustato R\^2 di ogni modello che indica la percentuale di adattabilità del modello ai dati veri
+
+-   Il criterio di informazione Bayesiano (BIC)
+
+-   Il test ANOVA
+
+## Verifiche preliminari
+
+Il dataset si presenta con la variabile Fumatrici espressa con valori binari. Per facilitare l'analisi se ne creerà una nuova con valori "Si" e "No".
+
+```{r}
+detach(neonati.clean)
+
+neonati.clean = neonati.clean %>%
+  mutate(Fumatrici_label = if_else(
+    Fumatrici==1, "Si", "No"
+  ), Fumatrici_label = as.factor(Fumatrici_label)) %>%
+  dplyr::select(Anni.madre, N.gravidanze, Fumatrici, Fumatrici_label, everything())
+
+  
+attach(neonati.clean)
+head(neonati.clean)
+```
+
+Verifichiamo ora che la variabile risposta Peso, oggetto dell'analisi, sia distribuita secondo una gaussiana.
+
+```{r, echo=FALSE, warning=FALSE}
+#| label: fig-density_peso
+
+ggplot(data = neonati.clean, aes(x=Peso))+
+  geom_density(colour = "blue4",
+               linewidth = .8,
+               fill = "blue",
+               alpha = .3)+
+  theme_linedraw()+
+  labs(title = "Densità di probabilità della variabile Peso")
+```
+
+La variabile peso sembra essere distribuita come una gaussiana, tranne che per la coda sinistra, decisamente più allungata rispetto a quella destra.
+
+D'altronde, ci si doveva aspettare una distribuzione del genere, avendo nel campione, delle nascite avvenute con gestazioni inferiori alla norma e di conseguenza neonati con peso inferiore (cfr. @fig-gestazione_count).
+
+Conduciamo il test di Shapiro-Wilk che verifica l'aderenza dei dati ad una normale per ulteriore scrupolo.
+
+```{r}
+
+shapiro.test(Peso)
+```
+
+Il p-value è sostanzialmente 0 e questo ci porta a rifiutare l'ipotesi nulla di normalità dei dati. Va ricordato che la variabile peso presentava comunque una forma lepticurtica e con un'asimmetria verso destra ( @tbl-indici_forma ) e questo probabilmente incide sul test.
+
+Si decide comunque di tenere a mente questo risultato ma spostare ogni valutazione una volta conseguito il modello definitivo.
+
+## Relazioni tra regressori e risposta
+
+In questo paragrafo metteremo su grafico le correlazioni tra tutte le variabili del nostro dataset, con l'obiettivo di individuare a colpo d'occhio eventuali correlazioni che ci possano fornire una guida in sede di definizione del modello.
+
+```{r, echo=FALSE}
+#| label: fig-cor_plot
+#| fig-cap: "Matrice e grafico delle correlazioni per le coppie di variabili"
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y))
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+pairs(neonati.clean, lower.panel = panel.smooth, upper.panel = panel.cor,
+      gap=0, row1attop=FALSE)
+```
+
+Lasciando per ora da parte le variabili categoriche come Fumatrici, Sesso, Tipo.parto per cui questo non è il grafico migliore, per tutte le quantitative possiamo ottenere alcune informazioni:
+
+-   Anni.madre e N.gravidanze sembrano non avere singolarmente una correlazione con il peso
+
+-   Gestazione, lunghezza e cranio ovviamente si. In particolare sembra che la gestazione abbia un andamento non lineare rispetto al peso, con la curva che tende ad appiattirsi per alti valori. Sembra ricalcare quasi una curva logaritmica.
+
+Per quanto riguarda invece le variabili categoriche:
+
+```{r, echo=FALSE}
+#| label: fig-patchwork_categoriche
+
+a=ggplot(data = neonati.clean, aes(x=Tipo.parto, y=Peso))+
+  geom_boxplot(fill = "orange",
+               alpha = .8)+
+  theme_linedraw()+
+  labs(title = "Distribuzione dei quantili della varibil categoriche rispetto al peso")
+
+b=ggplot(data = neonati.clean, aes(x=Ospedale, y=Peso))+
+  geom_boxplot(fill = "lightblue",
+               alpha = .8)+
+  theme_linedraw()
+  
+
+c=ggplot(data = neonati.clean, aes(x=Sesso, y=Peso))+
+  geom_boxplot(fill = "red",
+               alpha = .6)+
+  theme_linedraw()
+  
+
+d=ggplot(data = neonati.clean, aes(x=Fumatrici_label, y=Peso))+
+  geom_boxplot(fill = "grey",
+               alpha = .6)+
+  theme_linedraw()+
+  labs(
+       x = "Fumatrici")
+
+(a + b) / (c + d)
+```
+
+Su tutti i boxplot possiamo notare un tratto comune: la presenza di valori molto estremi, potenziali outliars che verranno valutati in sede di modellazione. Tendenzialmente sono verso il basso e questo deve essere dovuto al fatto che nel campione è presente un certo quantitativo di parti avvenuti con gestazioni inferiori alle 37 settimane, per la precisione:
+
+```{r, echo=FALSE}
+
+premature = neonati.clean %>%
+  filter(Gestazione <= 36) %>%
+  arrange(Gestazione)
+  
+length(premature$Gestazione)
+```
+
+Quanto al sesso, abbiamo già verificato in questo paragrafo @sec-differenza-di-peso-tra-i-sessi che le differenze fisiche tra i sessi esistono e sono statisticamente rilevanti.
+
+La variabile Fumatrici è molto sospetta perchè sembra indicare una cosa assolutamente controintuitiva, vale a dire la presenza di molti outliars sulle mamme NON fumatrici.
+
+A un'analisi più attenta però, possiamo scartare qualsiasi considerazione fatta su questa variabile, perchè all'interno del campione abbiamo un numero di mamme fumatrici decisamente basso per poter trarre qualsiasi conclusione.
+
+```{r, echo=FALSE}
+round(table(Fumatrici_label)/sum(table(Fumatrici_label)),2)
+```
+
+Cerchiamo invece di capire se ci siano differenze statisticamente significative tra peso e tipo parto o ospdedale.
+
+```{r}
+
+t.test(Peso~Tipo.parto, data = neonati.clean, alternative = "two.sided")
+```
+
+Il test t conferma, con un p-value a 89% che possiamo accettare l'ipotesi nulla per cui non esiste significativa differenza di peso rispetto al tipo di parto e in effetti, la cosa ha senso.
+
+```{r}
+
+neonati.clean %>%
+  filter(Ospedale != "osp3") %>%
+  t.test(Peso~Ospedale, data= ., alternative = "two.sided")
+
+
+neonati.clean %>%
+  filter(Ospedale != "osp2") %>%
+  t.test(Peso~Ospedale, data= ., alternative = "two.sided")
+
+
+neonati.clean %>%
+  filter(Ospedale != "osp1") %>%
+  t.test(Peso~Ospedale, data= ., alternative = "two.sided")
+```
+
+Anche nel confronto tra peso e ospedale il test t restituisce un p-value per tutte le 3 coppie (osp1-2, osp1-3, osp2-3) superiore al livello di significatività del 5%, ergo non rifiutiamo l'ipotesi nulla e concludiamo che la media dei pesi sugli ospedali non è diversa in maniera statisticamente significativa.
+
+## Definizione del modello con il metodo stepwise
+
+Si partirà dal modello più complesso e si procederà per semplificazioni iterative, eliminando via via i regressori che non apportano un contenuto significativo.
+
+### mod 0
+
+Partiamo dal modello che incorpora tutte le variabili, con l'unica eccezione della variabile Fumatrici che presenta la stessa informazione della variabile Fumatrici_label, con la differenza che la seconda è categorica mentre la prima è binaria.
+
+```{r}
+
+mod0 = lm(Peso~.- Fumatrici, data = neonati.clean)
+summary(mod0)
+
+```
+
+I dati salienti del modello che verranno utilizzati per tutti i confronti successivi sono:
+
+-   il p- value dei coefficienti di regressione. In questo caso abbiamo che i coefficienti di regressioni significativamente vicini allo 0 sono:
+
+    -   gli anni della madre
+
+    -   le fumatrici
+
+    -   gli ospedali
+
+-   R\^2 adjusted pari a 0,728
+
+Procediamo in maniera iterativa e proviamo eliminando le fumatrici, perchè effettivamente sono talmente poche rispetto al campione che non possono fornire rilievo nelle valutazioni.
+
+### mod 1
+
+```{r}
+
+mod1 = update(mod0, ~.-Fumatrici_label)
+summary(mod1)
+```
+
+È rimasto tutto invariato, a conferma che effettivamente, la variabile Fumatrici non forniva un'informazione rilevante.
+
+### mod 2
+
+La candidata successiva diventa la variabile Ospedale. Si sta aspettando ad eliminare quella che dai numeri sembrerebbe la prima in assoluto da scartare, gli anni della madre, per vedere se la situazione possa cambiare concentrandoci su variabili, come l'ospedale, concettualmente più separate dal peso del bambino.
+
+```{r}
+
+mod2 = update(mod1, ~.-Ospedale)
+summary(mod2)
+
+```
+
+Abbiamo perso circa 1 millesimo su R\^2 adjusted, ora a 0,727, assolutamente accettabile e conferma definitiva che la variabile Ospedale non apportasse significativo contributo al modello.
+
+### mod 3
+
+A questo punto, non resta che provare a scartare gli anni della madre e vedere che impatto otteniamo. Ce lo si aspetta contenuto, essendo quella con il coefficiente di regressione con p-value maggiore.
+
+```{r}
+
+mod3 = update(mod2, ~.-Anni.madre)
+summary(mod3)
+```
+
+I sospetti vengono confermati: R\^2 adjusted rimane fermo a quota 0,727. Tutti i coefficienti di regressione sono ora sotto la soglia del 5% di livello di significatività, laddove il più alto p-value è a 1,2% per il tipo di parto.
+
+### mod 4
+
+Proviamo ad eliminare la variabile tipo parto e vediamo cosa accade al modello. In questo caso ci aspetteremo di vedere R\^2 cambiare.
+
+```{r}
+
+mod4 = update(mod3, ~.-Tipo.parto)
+summary(mod4)
+```
+
+Si perde un ulteriore millesimo su R\^2 adjusted, ora a quota 0,726. Si ritiene la perdita accettabile in cambio di una semplificazione del modello. Ad ora infatti sono state scartate 4 variabili su 8 a fronte di una perdita di 2 millesimi su R\^2 adjusted.
+
+### mod 5
+
+Proviamo a scartare il numero di gravidanze pregresse per valutare cosa accade al modello. È una variabile significativa, ma è quella che, pur con p-value bassissimo, lo ha ben più alto di tutte le altre.
+
+```{r}
+
+mod5 = update(mod4, ~.-N.gravidanze)
+summary(mod5)
+```
+
+R\^2 adjusted rimane in effetti invariato e giustificherebbe l'eliminazione della variabile dal modello. Dal momento che gli anni della madre sono comunque ritenuti, in ambito medico, un fattore che incide sulle gravidanze, si effettueranno ulteriori test per capire se mantenere o meno la variabile.
+
+### Test sui modelli
+
+Innanzitutto isoliamo le valutazioni agli ultimi 2, il modello 4 e il 5.
+
+Il primo test che effettuiamo è l'ANOVA, acronimo di analysis of variances. Il test confronta il tasso di variazione degli scarti quadratici nel passaggio da un modello più complesso a uno più semplice, pesando questa variazione rispetto a quanto il modello più complesso riusciva a spiegare.
+
+```{r}
+
+anova(mod5, mod4)
+```
+
+Il p-value viene molto basso, questo porterebbe a concludere che l'ipotesi nulla per cui il modello più semplice non fa perdere informazioni rispetto a quello più complesso debba essere rifiutata. L'ANOVA dunque suggerisce di mantenere il modello 4.
+
+Proviamo con il test di informazione bayesiano.
+
+```{r}
+
+BIC(mod1, mod2, mod3, mod4, mod5)
+
+```
+
+Il test passa sul modello che totalizza il punteggio più basso e anche in questo caso è il modello 4 a essere preferito.
+
+Proviamo infine a lanciare la procedura stepwise automatizzata per verificare quali passi segua e se atterri sulle nostre stesse conclusioni
+
+```{r}
+step.mod = stepAIC(mod0,
+        direction = "both",
+        k=log(length(Peso)))
+
+summary(step.mod)
+
+```
+
+Anche la procedura automatizzata atterra sul modello 4 che a questo punto teniamo come quello migliore finora.
+
+### Relazioni non lineari dei regressori
+
+Osservando l'immagine @fig-cor_plot, possiamo notare come la relazione tra la variabile risposta Peso e le variabili indipendenti Gestazione, Lunghezza e Cranio, non sia proprio lineare.
+
+Si può notare infatti un cambio di pendenza nella retta di correlazione tra le variabili, che lascia un'apertura nei confronti di relazioni delle variabili indipendenti con la variabile risposta non lineari.
+
+Se ne indagheranno alcune per verificare se si riesca a ottenere un miglioramento del R\^2 adjusted rispetto al modello 4.
+
+#### Risposta logaritmica della Gestazione
+
+L'andamento del peso rispetto alla gestazione potrebbe far intendere una relazione logaritmica. Si prova quindi ad aggiornare il modello 4 con il logaritmo della gestazione.
+
+```{r}
+
+mod6 = lm(formula = Peso ~ N.gravidanze + I(log(Gestazione)) + Lunghezza + Cranio + 
+            Sesso, data = neonati.clean)
+
+summary(mod6)
+
+
+```
+
+Nessun miglioramento rispetto al semplice modello 4, che viene confermato anche dal BIC.
+
+```{r}
+BIC(mod4, mod6)
+
+```
+
+Si scarta quindi l'ipotesi di un andamento logaritmico.
+
+#### Risposta quadratica rispetto alla lunghezza
+
+Proviamo a sondare l'ipotesi che la variabile risposta sia meglio descritta con un andamento quadratico rispetto alla lunghezza.
+
+```{r}
+
+mod7 = lm(formula = Peso ~ N.gravidanze + Gestazione + I(Lunghezza^2) + Cranio + 
+            Sesso, data = neonati.clean)
+
+summary(mod7)
+```
+
+Abbiamo un incremento di ben un punto percentuale su R\^2 adjusted che ora passa a 0,732, persino migliore del modello iniziale con tutte le variabili.
+
+Verifichiamo il BIC rispetto al modello 4.
+
+```{r}
+
+BIC(mod4, mod7)
+```
+
+Il modello 7 scalza il modello 4 e diventa il nostro modello migliore.
+
+#### Risposta quadratica rispetto al Cranio
+
+Come fatto per la lunghezza, testiamo una relazione quadratica rispetto al Cranio, partendo però non più dal modello 4, ma dal 7.
+
+```{r}
+
+mod8 = lm(formula = Peso ~ N.gravidanze + Gestazione + I(Lunghezza^2) + I(Cranio^2) + 
+            Sesso, data = neonati.clean)
+
+summary(mod8)
+```
+
+Un miglioramento di un ulteriore millesimo di punto su R\^2 adjusted che porterebbe a ritenere che il modello 8 possa sostituire il 7.
+
+Facciamo il test BIC per averne conferma.
+
+```{r}
+
+BIC(mod4, mod7, mod8)
+```
+
+Abbiamo un miglioramento ulteriore rispetto al modello 7 confermato anche dal BIC e pertanto teniamo il modello 8 come migliore fino ad ora.
+
+#### Risposta quadratica della Gestazione
+
+Proviamo a saggiare la possibilità di una relazione non logaritmica, ma quadratica tra la Gustazione e la variabile risposta Peso.
+
+```{r}
+
+mod9 = lm(formula = Peso ~ N.gravidanze + I(Gestazione^2) + I(Lunghezza^2) + I(Cranio^2) + Sesso, 
+          data = neonati.clean)
+
+summary(mod9)
+```
+
+Vediamo che R\^2 adjusted è rimasto invariato e secondo il principio del rasoio di Ockam, potremmo concludere che sia meglio mantenere il modello più semplice dal momento che non otteniamo risultati degni di nota con il quadrato della gestazione.
+
+Effettuiamo un test bayesiano per avere ulteriore conferma
+
+```{r}
+
+BIC(mod4, mod7, mod8, mod9)
+```
+
+Il test mostra che il modello 9, che coincide con il modello 8 con l'aggiunta della risposta quadratica sulla gestazione, non è da preferirsi al modello 8.
+
+In linea con il test bayesiano e con il principio del rasoio di Ockam, si mantiene il modello 8 come il migliore ottenuto ad ora.
+
+### Multicolinearità
+
+Ora che abbiamo identificato un modello definitivo, verifichiamo che non sussista multicolinearità tra le variabili indipendenti.
+
+Se ci fossero infatti variabili correlate tra loro, potremmo avere effetti imprevedibili sulla risposta e quindi distorsioni nelle previsioni.
+
+```{r}
+
+vif(mod = mod8)
+```
+
+La soglia comunemente utilizzata è di 5. Dal momento che tutte le variabili sono abbondantemente sotto soglia, possiamo concludere che non sussiste multicolinearità tra loro.
+
+### Mean Squared Error (MSE)
+
+Verifichiamo ora che l'errore (o residuo) medio quadratico sia il minimo possibile. Il confronto lo faremo ovviamente tra il nostro modello definitivo, il modello 4 e quello iniziale.
+
+```{r}
+
+MSE_mod0 = mean(mod0$residuals^2)
+MSE_mod4 = mean(mod4$residuals^2)
+MSE_mod8 = mean(mod8$residuals^2)
+
+MSE_mod0
+MSE_mod4
+MSE_mod8
+
+```
+
+Decisamente il modello 8 è quello da selezionare. Pur essendo più semplice, vale a dire avendo meno variabili, cosa che porta tendenzialmente a un aumento dei residui, abbiamo addirittura una riduzione rispetto al modello iniziale.
+
+### Commenti sul modello 8
+
+Il modello 8 presenta dunque il giusto compromesso tra semplicità e attinenza ai dati, con relazioni sia lineari che quadratiche che nel complesso hanno portato R\^2 adjusted ad essere addirittura migliore che il valore inizialmente assunto con il modello avente tutte le variabili del campione.
+
+Questi sono i coefficienti di regressione "beta" associati ad ogni regressore
+
+```{r}
+
+mod8$coefficients
+```
+
+Al netto dell'intercetta, possiamo notare come ciascuno abbia un contributo positivo sulla variabile risposta Peso. In parole povere, ogni incremento nei regressori porta un aumento nel peso.
+
+La variabile più impattante è quella del sesso, per cui i maschi incidono con 73 grammi in più rispetto alle femmine.
+
+Segue poi la gestazione per cui, per ogni settimana di gestazione in più, il bambino ottiene 36,5 grammi. Ovviamente questo dato è da leggersi "cum grano salis" perchè il numero di settimane di gestazione ha un suo valore naturale e non può aumentare a dismisura.
+
+Anche il numero di gravidanze pregresse sembra avere un effetto positivo sulla risposta del Peso, laddove per ogni gravidanza in più che la mamma ha avuto, si ha un incremento di 13 grammi nel peso del bambino.
+
+I coefficienti di regressione più piccoli sono legati alla lunghezza e al diametro del cranio. Ciò è dovuto dal fatto che queste due variabili crescono con il quadrato, e questa crescita più rapida viene bilanciata da coefficienti di regressione più bassi. In questi casi, determinare l'incremento di peso, per incremento unitario della variabile, è più complesso.
+
+Per ogni incremento unitario di lunghezza o diametro craniale, il bambino acquisisce rispettivamente questo quantitativo di grammi in più
+
+$$
+\beta_{i}\left( 1 + 2X^{n-1}_{i} \right)
+$$
+
+Dove $X^{n-1}_{i}$ è il valore della lunghezza o diametro craniale precedente all'aumento unitario.
+
+### Verifica della parte erratica
+
+Come ultimo controllo di validità del nostro modello, si deve verificare che i residui aderiscano a delle caratteristiche che li tengano "sotto controllo":
+
+-   distribuzione normale: i residui devono essere distribuiti normalmente, vale a dire addensati attorno allo 0
+
+-   omoschedasticità: la varianza deve essere costante
+
+-   non correlazione: i residui non devono essere tra loro correlati. Altrimenti si avrebbe una tendenza all'aumento o diminuzione che porterebbe il modello a divergere (come per l'omoschedasticità del resto)
+
+Effettueremo sia una verifica grafica, che una numerica.
+
+#### Correlazione dei residui
+
+Il grafico seguente mostra, per ogni risposta del modello (asse x), quanto scarto (asse y) ci sia rispetto al corrispettivo valore reale nel dataset.
+
+Sostanzialmente stiamo vedendo, su grafico, come siano distribuiti i residui del nostro modello. Quello che si vuole vedere è una dispersione sostanzialmente orizzontale. Non vogliamo che il modello abbia una correlazione, positiva o negativa che sia, con i residui.
+
+Il grafico sembra confermare che non ci sia correlazione dei residui
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#| label: fig-correlazione_residui
+
+
+tab_residui = data.frame(indice = 1:length(mod8$residuals),
+                         residui = mod8$residuals,
+                     modello = mod8$fitted.values,
+                     res_std = rstudent(model = mod8),
+                     leva = hatvalues(model = mod8),
+                     cook = cooks.distance(model = mod8)) 
+
+
+ggplot(data = tab_residui, aes(modello, residui))+
+  geom_point(shape = 1)+
+  geom_smooth()+
+  theme_linedraw()+
+  labs(title = "Distribuzione dei residui rispetto alle risposte del modello",
+       x = "Valori di risposta del modello",
+       y = "Residui")
+```
+
+Per avere una conferma numerica a quello che il grafico ci mostra, effettuiamo il test di Durbin-Watson che ha questo sistema di ipotesi. Fissiamo come sempre il livello di significatività sempre al 5%.
+
+$$
+\begin{cases} H_{0} :  \mbox{Autocorrelazione dei residui}=0 \\ H_{1} :  \mbox{Autocorrelazione dei residui }>0 \end{cases}
+$$
+
+```{r}
+dwtest(mod8)
+```
+
+Con un p-value di poco superiore all'11% non rifiutiamo l'ipotesi nulla e confermiamo che i residui del modello non siano autocorrelati.
+
+#### Distribuzione normale dei residui
+
+Con il successivo grafico vogliamo verificare invece che i residui seguano una distribuzione normale. Per farlo utilizziamo un grafico q-q, che sta per quantile-quantile. Viene divisa in quantili la distribuzione normale e si posizionano sia sull'asse x che y. In questo modo, se i residui seguiranno questa distribuzione, dovranno posizionarsi sulla bisettrice del quadrante.
+
+Ci si aspetta di vedere degli scostamenti, soprattutto alle code, poichè il dataset contiene bambini nati prematuramente e alcuni nati dopo le 40 settimane.
+
+```{r, echo=FALSE}
+#| label: qq_residui
+
+
+ggplot(data = tab_residui, aes(sample = residui))+
+  geom_qq(shape = 1)+
+  geom_qq_line(colour = "red",
+               linetype = "dashed")+
+  theme_linedraw()+
+  labs(title = "Distribuzione normale dei residui",
+       x = "Quantili normale standard",
+       y = "Quantili normale standard")
+    
+```
+
+Come supposto inizialmente, i residui del modello sembrano addensarsi bene sulla bisettrice tranne che sulle code, in particolare sulla coda destra della normale (o sulla parte il alto a destra della bisettrice del grafico q-q).
+
+Anche in questo caso effettuiamo un test numerico per vefiricare quanto i residui aderiscano a una normale standard.
+
+```{r}
+
+shapiro.test(mod8$residuals)
+```
+
+L'ipotesi nulla del test di Shapiro-Wilk è che il vettore di dati presentato sia distribuito normalmente. Il p-value è sostanzialmente 0, quindi dobbiamo rifiutare l'ipotesi nulla: i nostri residui non aderiscono bene a una distribuzione normale standard.
+
+Per ora teniamo a mente questo risultato e proseguiamo con l'analisi senza invalidare il modello. Tireremo a valle tutte le conclusioni.
+
+#### Omoschedasticità dei residui
+
+Terzo criterio che i nostri residui devono rispettare è quello di omoschedasticità: la varianza dei residui non deve mostre dei pattern ben precisi, ma essere sparpagliata orizzontalmente.
+
+Sull'asse delle x troviamo le risposte del modello, mentre su quello delle y troviamo le radici quadrate dei valori assoluti dei residui "studentizzati". Questa operazione viene fatta al fine di addensare i residui quanto più possibile per rendere più facile l'individuazione degli outliars.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#| label: fig-omoschedasticity
+
+
+ggplot(data = tab_residui, aes(x=modello, y=sqrt(abs(res_std))))+
+  geom_point(shape = 1)+
+  theme_linedraw()+
+  geom_smooth()+
+  labs(title = "Verifica dell'omoschedasticità",
+       x = "Risposte del modello",
+       y = "Radice quadrata dei residui standardizzati")
+
+```
+
+Il grafico lascia intendere che ci sia una distribuzione dei residui abbastanza sparpagliata, ma si nota come la retta di tendenza blu sia leggermente inclinata positivamente. Effettuiamo un test numerico per eliminare ogni dubbio.
+
+Il test di Breusch-Pagan ha questo sistema di ipotesi
+
+$$
+\begin{cases} H_{0} :  \mbox{I residui sono omoshedastici } \\ H_{1} :  \mbox{I residui sono eteroschedastici } \end{cases}
+$$
+
+```{r}
+bptest(mod8)
+```
+
+Il p-value viene bassissimo e quindi non possiamo accettare l'ipotesi nulla. Dobbiamo concludere che i residui non hanno una varianza costante, sono eteroschedastici.
+
+Anche in questo caso, teniamo a mente il risultato e proseguiamo con l'analisi.
+
+#### Leva e outliars
+
+L'ultimo tassello da verificare è la presenza di outliars e valori di leva. Sono entrambi valori che indicano uno scostamento significativo del modello rispetto ai dati reali: nel caso degli outliars lo scostamento è sulla variabile risposta, per la leva è sui regressori.
+
+Iniziamo con un grafico più semplice che rappresenti la distribuzione dei residui studentizzati con soglie a +2 e -2.
+
+```{r, echo=FALSE}
+#| label: fig-outliars
+
+ggplot(data = tab_residui, aes(x=indice, y=res_std))+
+  geom_point(shape = 1)+
+  geom_hline(yintercept = c(2,-2),
+             colour = "red",
+             linetype = "dashed",
+             linewidth = 0.8)+
+  theme_linedraw()+
+  labs(title = "Identificazione di potenziali outliars",
+       x = "Osservazione",
+       y = "Residui studentizzati")
+```
+
+Il grafico sopra riportato mostra in effetti dei valori dei residui studentizzati oltre le soglie impostate. Questi sono punti di attenzione ma che non necessariamente si traducono in outliars perchè potrebbero non avere un effetto "dannoso" nei confronti del modello. A un'ispezione grafica infatti si riscontra come, a eccezione di pochi, siano tutti abbastanza vicini alle soglie. Verificheremo il tutto più avanti con un test specifico.
+
+Il grafico seguente contiene molte informazioni, ma una volta chiarite dovrebbe risultare di facile lettura:
+
+-   asse x: i valori di leva, che più sono alti e più indicano dei regressori lontani rispetto al resto
+
+-   asse y: residui studentizzati
+
+-   soglia leverage: linea tratteggiata blu che indica la soglia superata la quale identifichiamo i punti con leva da tenere sotto controllo. Non è detto che si traducano in outliars, ma potrebbero.
+
+$$
+\mbox{Soglia leverage}= \frac{2p}{n}
+$$
+
+-   linea rossa tratteggiata: indica semplicemente lo 0 attorno al quale vogliamo si addensino i nostri residui
+
+-   dimensione e colore dei punti: la dimensione dei punti aumenta con l'aumentare della distanza di Cook per ciascuno, come anche il colore che invece tenderà sempre più al rosso. La distanza di Cook è un parametro associato ai residui che, se superiore a 0,5 indica un punto da monitorare, se superiore a 1 indica un outliar.
+
+```{r, echo=FALSE}
+#| label: fig-leverage_cook
+
+
+ggplot(data = tab_residui, aes(x = leva, y = res_std))+
+  geom_point(aes(size = cook, colour = cook, alpha = 0.7))+
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = 2*sum(tab_residui$leva)/length(tab_residui$leva),
+             colour = "blue",
+             linetype = "dashed")+
+  annotate(geom = "label", label = "Soglia leverage",
+           x = 2*sum(tab_residui$leva)/length(tab_residui$leva)+0.0045,
+           y = 9,
+           colour = "blue")+
+  theme_linedraw()+
+  scale_color_gradient(low = "orange2", high = "red2")+
+  labs(title= "Residui vs Leva e distanza di Cook",
+       x = "Leva",
+       y = "Residui standardizzati")
+```
+
+In questo caso abbiamo valori di leva che si posizionano oltre la soglia, pochi comunque rispetto alla maggioranza, ma uno solo di loro, in alto a destra come potenziale outliar.
+
+Effettuiamo comunque un test numerico per identificare altri outliars che possano sfuggire a un'analisi visiva del grafico
+
+```{r}
+
+outlierTest(model = mod8)
+```
+
+Vengono identificati 4 valori outliars, valori che hanno un effetto particolarmente pronunciato nei confronti del modello. Ad ogni modo, trattandosi di 4 valori su un campione di 2500 osservazioni, qualunque effetto possano avere sarà sicuramente ammortizzato dal resto del campione.
+
+# Previsioni del modello
+
+Proviamo ad effettuare, alcune previsioni di test sfruttando il modello.
+
+```{r}
+
+predict(mod8, newdata = data.frame(N.gravidanze = 2, 
+                                   Gestazione = 41, 
+                                   Lunghezza = 500,
+                                   Cranio = 330,
+                                   Sesso = "F"))
+
+predict(mod8, newdata = data.frame(N.gravidanze = 0, 
+                                   Gestazione = 40, 
+                                   Lunghezza = 510,
+                                   Cranio = 330,
+                                   Sesso = "M"))
+predict(mod8, newdata = data.frame(N.gravidanze = 1, 
+                                   Gestazione = 40, 
+                                   Lunghezza = 500,
+                                   Cranio = 330,
+                                   Sesso = "M"))
+
+predict(mod8, newdata = data.frame(N.gravidanze = 1, 
+                                   Gestazione = 40, 
+                                   Lunghezza = 480,
+                                   Cranio = 330,
+                                   Sesso = "M"))
+```
+
+I test sono stati condotti su nascite di cui si conosce il peso e, tranne nel primo caso, in cui la bambina è nata pesando 2,8 kg, quasi mezzo chilo di differenza rispetto al modello, negli altri casi la corrispondenza è molto vicina alla realtà.
+
+Proviamo infine una previsione con dati parziali. Supponiamo ad esempio di voler prevedere il peso di una bambina la cui madre è alla terza gravidanza e partorirà alla 39ma settimana.
+
+In questo caso, mancando i dati di lunghezza e cranio, utilizzeremo le medie del nostro campione.
+
+```{r}
+
+predict(mod8, newdata = data.frame(N.gravidanze = 2, 
+                                   Gestazione = 39, 
+                                   Lunghezza = mean(neonati.clean$Lunghezza),
+                                   Cranio = mean(neonati.clean$Cranio),
+                                   Sesso = "F"))
+```
+
+# Conclusioni
+
+Possiamo concludere che il modello si adatta bene sui valori "normali" e nascite non particolari, mentre sulle code, parti prematuri o tardivi, o anche pesi eccessivamente alti o bassi pur in gestazioni normali, non garantisce ottime performance.
+
+Le evidenze riscontrate sull'eteroschedasticità e sulla distribuzione normale dei residui si consiglia di non farle incidere sulla valutazione del modello. Effettivamente, è il migliore identificabile, rimanendo nella linearità, con i dati a disposizione.
+
+Si suggerisce pertanto di avviare una fase di "valutazione sul campo" del modello, usandolo nei vari reparti dei 3 ospedali per fare previsioni sul peso alla nascita. Il peso effettivo verrà poi confrontato con la previsione e verranno tratte nuove conclusioni sulle performance a valle.
+
+Sarà inoltre possibile, in questo modo, fare una valutazione dei benefici apportati in termini economici tramite l'efficientamento delle risorse. Se i benefici apportati saranno comunque superiori dei costi sostenuti per i casi di previsione errata, sarà comunque accettabile mantenere un modello di cui si conoscono esattamente i limiti.
