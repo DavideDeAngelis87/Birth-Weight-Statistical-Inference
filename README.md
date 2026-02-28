@@ -25,4 +25,4 @@ Il workflow analitico segue un approccio scientifico suddiviso in fasi chiave:
 
 ## Risultati Interattivi
 Il report completo, con tutto il codice R e i grafici diagnostici interattivi, è consultabile qui:
-**[Link al report su RPubs]([https://rpubs.com/DaveDea/previsione_peso_neonatale](https://rpubs.com/DaveDea/lm_weight_birth_v2))**
+**[Link al report su RPubs](https://rpubs.com/DaveDea/previsione_peso_neonatale](https://rpubs.com/DaveDea/lm_weight_birth_v2)**
